@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "iisb-inpaint"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [
+    {include = 'inpaint'},
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+torch = "^2.2.2"
+torchaudio = "^2.2.2"
+torchinfo = "^1.8.0"
+a-unet = "^0.0.16"
+tqdm = "^4.66.2"
+lightning = "^2.2.1"
+pydantic = "^2.6.4"
+k-diffusion = "^0.1.1.post1"
+torch-ema = "^0.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
