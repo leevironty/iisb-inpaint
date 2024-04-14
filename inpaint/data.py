@@ -3,13 +3,16 @@ from dataclasses import dataclass
 
 
 import lightning
+from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
 from pydantic import BaseModel, Field
 import numpy.random as rng
 from torch import Tensor
+import torch.utils
 import torchaudio.functional as F
 import torchaudio
 from torch.utils.data import Dataset
 import torch
+from torch.utils.data import random_split, DataLoader
 from torch import Tensor
 
 class Meta(BaseModel):
@@ -43,13 +46,13 @@ class AudioAugment:
     def __call__(self, wave: Tensor) -> Tensor:
         n_batch = wave.shape[0]
         mults = self.get_mult(n_batch)
-        return wave * mults[:, None]
+        return wave * mults[:, None].to(wave.device)
 
     def get_mult(self, n_batch) -> Tensor:
         polarity = torch.randint(0, 2, (n_batch,)) * 2 - 1
         r = torch.rand((n_batch,))
-        db = self.adjust_db_lb + (self.adjust_db_ub - self.adjust_db_ub) * r
-        amplitude = 10 ** db
+        db = self.adjust_db_lb + (self.adjust_db_ub - self.adjust_db_lb) * r
+        amplitude = 10 ** (db / 10)
         return polarity * amplitude
 
 
@@ -78,27 +81,6 @@ class Degradation:
             for start, end in zip(starts, ends):
                 mask[batch, start:end] = True
         return wave * ~mask, mask
-
-    #     # n_blocks = rng.randint(self.min_count, self.max_count)
-    #     # for _ in range(n_blocks):
-    #     #     duration = int(rng.exponential(scale=self.avg_len))
-    #     #     duration = min(max(duration, self.min_len), self.max_len)
-    #     #     start = rng.randint(0, samples)
-    #     #     wv[start:start+duration] = 0
-    #     # return wv 
-    #     # return torch.cat([self.mask_one_sample(tensor) for tensor in wave]).detach()
-
-    # def mask_one_sample(self, wv: Tensor) -> Tensor:
-    #     wv = wv[:]
-    #     samples = wv.shape[-1]
-    #     n_blocks = rng.randint(self.min_count, self.max_count)
-    #     for _ in range(n_blocks):
-    #         duration = int(rng.exponential(scale=self.avg_len))
-    #         duration = min(max(duration, self.min_len), self.max_len)
-    #         start = rng.randint(0, samples)
-    #         wv[start:start+duration] = 0
-    #     return wv
-
 
 
 class RandomTracks(Dataset):
@@ -143,6 +125,24 @@ class RandomTracks(Dataset):
         return sample
 
 
-class Data(lightning.LightningDataModule):
-    def __init__(self) -> None:
+class TrackDataModule(lightning.LightningDataModule):
+    def __init__(self, root: str, samples: int, batch_size: int) -> None:
         super().__init__()
+        self.root = root
+        self.samples = samples
+        self.batch_size = batch_size
+    
+    def setup(self, stage: str):
+        dataset = RandomTracks(root=self.root, samples=self.samples)
+        train, val = random_split(
+            dataset, [0.9, 0.1], generator=torch.Generator().manual_seed(42)
+        )
+
+        self.data_train = train
+        self.data_val = val
+    
+    def train_dataloader(self) :
+        return DataLoader(self.data_train, self.batch_size, num_workers=4, persistent_workers=True)
+    
+    def val_dataloader(self):
+        return DataLoader(self.data_val, self.batch_size, num_workers=4, persistent_workers=True)

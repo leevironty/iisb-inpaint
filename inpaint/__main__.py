@@ -1,13 +1,14 @@
 from lightning.pytorch.cli import LightningCLI
 
-from inpaint._runner import RunnerLightning
-from inpaint.data import Data
+from inpaint.runner import RunnerLightning
+from inpaint.data import TrackDataModule
 
 def main():
     LightningCLI(
         model_class=RunnerLightning,
-        datamodule_class=Data,
-
+        datamodule_class=TrackDataModule,
+        # overwrites versioned config in tensorboard logging folder
+        save_config_kwargs={"overwrite": True},
     )
 
 

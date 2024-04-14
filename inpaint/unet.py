@@ -21,7 +21,7 @@ class UNet(torch.nn.Module):
     def __init__(
         self,
         dim: int,
-        in_channels: int,
+        # in_channels: int,
         channels: Sequence[int],
         factors: Sequence[int],
         items: Sequence[int],
@@ -40,6 +40,7 @@ class UNet(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.token_size = token_size if token_size is not None else 1
+        in_channels = self.token_size
         # Check lengths
         num_layers = len(channels)
         sequences = (channels, factors, items, attentions)

@@ -1,0 +1,102 @@
+# lightning.pytorch==2.2.1
+seed_everything: true
+trainer:
+  accelerator: auto
+  strategy: auto
+  devices: auto
+  num_nodes: 1
+  precision: null
+  logger:
+    class_path: lightning.pytorch.loggers.TensorBoardLogger
+    init_args:
+      save_dir: .
+      version: attention-big-big
+      name: .tensorboard
+  callbacks: null
+  fast_dev_run: false
+  max_epochs: -1
+  min_epochs: null
+  max_steps: -1
+  min_steps: null
+  max_time: null
+  limit_train_batches: null
+  limit_val_batches: null
+  limit_test_batches: null
+  limit_predict_batches: null
+  overfit_batches: 0.0
+  val_check_interval: null
+  check_val_every_n_epoch: 1
+  num_sanity_val_steps: null
+  log_every_n_steps: 1
+  enable_checkpointing: null
+  enable_progress_bar: null
+  enable_model_summary: null
+  accumulate_grad_batches: 1
+  gradient_clip_val: null
+  gradient_clip_algorithm: null
+  deterministic: null
+  benchmark: null
+  inference_mode: true
+  use_distributed_sampler: true
+  profiler: null
+  detect_anomaly: false
+  barebones: false
+  plugins: null
+  sync_batchnorm: false
+  reload_dataloaders_every_n_epochs: 0
+  default_root_dir: null
+model:
+  net:
+    class_path: inpaint.unet.UNet
+    init_args:
+      dim: 1  # 1d, 2d, 3d
+      token_size: 1
+      channels: [32, 32, 64, 128, 256, 256]
+      factors: [2, 4, 4, 4, 4, 4]
+      items: [2, 2, 1, 1, 2, 2]
+      attentions: [0, 0, 0, 0, 2, 2]
+      attention_features: 32
+      attention_heads: 4
+      skip_t: a_unet.apex.SkipCat
+      resnet_groups: 4
+      modulation_features: 512
+      out_channels: null
+    # init_args:
+    #   dim: 1
+    #   in_channels: 1
+    #   channels: [32, 64, 64]
+    #   factors: [2, 4, 4]
+    #   items: [2, 2, 2]
+    #   attentions: [0, 0, 1]
+    #   attention_features: 128
+    #   attention_heads: 4
+    #   skip_t: a_unet.apex.SkipCat
+    #   resnet_groups: 8
+    #   modulation_features: 64
+    #   out_channels: null
+    #   token_size: 8
+  augment:
+    polarity: true
+    adjust_db_lb: -5.0
+    adjust_db_ub: 5.0
+  corrupt:
+    min_len: 4
+    avg_len: 192
+    max_len: 2000
+    min_count: 4
+    max_count: 20
+  config:
+    lr: 0.01
+    lr_step: 100
+    lr_gamma: 1.0
+    l2_norm: 0.0
+    interval: 1000
+    beta_max: 0.3
+    t0: 0.0001
+    t1: 1.0
+    ot_ode: false
+data:
+  root: .dataset-musdb-hq
+  samples: 65536
+  batch_size: 8
+ckpt_path: null

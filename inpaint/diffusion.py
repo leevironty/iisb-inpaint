@@ -25,9 +25,8 @@ def compute_gaussian_product_coef(sigma1, sigma2):
     var = (sigma1**2 * sigma2**2) / denom
     return coef1, coef2, var
 
-class Diffusion():
+class Diffusion:  # Being a module eases device management
     def __init__(self, betas: list, device: torch.device):
-
         self.device = device
 
         # compute analytic std: eq 11
@@ -38,15 +37,15 @@ class Diffusion():
 
         # tensorize everything
         to_torch = partial(torch.tensor, dtype=torch.float32)
-        self.betas = to_torch(betas).to(device)
-        self.std_fwd = to_torch(std_fwd).to(device)
-        self.std_bwd = to_torch(std_bwd).to(device)
-        self.std_sb  = to_torch(std_sb).to(device)
-        self.mu_x0 = to_torch(mu_x0).to(device)
-        self.mu_x1 = to_torch(mu_x1).to(device)
+        self.betas = to_torch(betas)
+        self.std_fwd = to_torch(std_fwd)
+        self.std_bwd = to_torch(std_bwd)
+        self.std_sb  = to_torch(std_sb)
+        self.mu_x0 = to_torch(mu_x0)
+        self.mu_x1 = to_torch(mu_x1)
 
     def get_std_fwd(self, step, xdim=None):
-        std_fwd = self.std_fwd[step]
+        std_fwd = self.std_fwd.to(step.device)[step]
         return std_fwd if xdim is None else unsqueeze_xdim(std_fwd, xdim)
 
     def q_sample(self, step: Tensor, x0: Tensor, x1: Tensor, ot_ode: bool):
@@ -55,9 +54,13 @@ class Diffusion():
         assert x0.shape == x1.shape
         batch, *xdim = x0.shape
 
-        mu_x0  = unsqueeze_xdim(self.mu_x0[step],  xdim)
-        mu_x1  = unsqueeze_xdim(self.mu_x1[step],  xdim)
-        std_sb = unsqueeze_xdim(self.std_sb[step], xdim)
+
+        # print(self.mu_x0.device)
+        # print(self.device)
+        # print(step.device)
+        mu_x0  = unsqueeze_xdim(self.mu_x0.to(step.device)[step],  xdim)
+        mu_x1  = unsqueeze_xdim(self.mu_x1.to(step.device)[step],  xdim)
+        std_sb = unsqueeze_xdim(self.std_sb.to(step.device)[step], xdim)
 
         xt = mu_x0 * x0 + mu_x1 * x1
         if not ot_ode:
@@ -68,8 +71,8 @@ class Diffusion():
         """ Sample p(x_{nprev} | x_n, x_0), i.e. eq 4"""
 
         assert nprev < n
-        std_n     = self.std_fwd[n]
-        std_nprev = self.std_fwd[nprev]
+        std_n     = self.std_fwd.to(nprev.device)[n]
+        std_nprev = self.std_fwd.to(nprev.device)[nprev]
         std_delta = (std_n**2 - std_nprev**2).sqrt()
 
         mu_x0, mu_xn, var = compute_gaussian_product_coef(std_nprev, std_delta)
