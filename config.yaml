@@ -10,7 +10,7 @@ trainer:
     class_path: lightning.pytorch.loggers.TensorBoardLogger
     init_args:
       save_dir: .
-      version: attention-big-big
+      version: quad-low-dims
       name: .tensorboard
   callbacks: null
   fast_dev_run: false
@@ -31,8 +31,8 @@ trainer:
   enable_checkpointing: null
   enable_progress_bar: null
   enable_model_summary: null
-  accumulate_grad_batches: 1
-  gradient_clip_val: null
+  accumulate_grad_batches: 16
+  gradient_clip_val: 0.2
   gradient_clip_algorithm: null
   deterministic: null
   benchmark: null
@@ -51,14 +51,14 @@ model:
     init_args:
       dim: 1  # 1d, 2d, 3d
       token_size: 1
-      channels: [32, 32, 64, 128, 256, 256]
-      factors: [2, 4, 4, 4, 4, 4]
-      items: [2, 2, 1, 1, 2, 2]
-      attentions: [0, 0, 0, 0, 2, 2]
-      attention_features: 32
-      attention_heads: 4
-      skip_t: a_unet.apex.SkipCat
-      resnet_groups: 4
+      channels: [16, 16, 32, 32, 64, 64, 128]
+      factors: [2, 4, 4, 4, 4, 4, 4]
+      items: [4, 4, 4, 4, 3, 3, 3]
+      attentions: [0, 0, 0, 0, 2, 2, 2]
+      attention_features: 128
+      attention_heads: 8
+      # skip_t: a_unet.apex.SkipCat
+      resnet_groups: 8
       modulation_features: 512
       out_channels: null
     # init_args:
@@ -77,21 +77,26 @@ model:
     #   token_size: 8
   augment:
     polarity: true
-    adjust_db_lb: -5.0
-    adjust_db_ub: 5.0
+    adjust_db_lb: -2.0
+    adjust_db_ub: 2.0
   corrupt:
     min_len: 4
     avg_len: 192
-    max_len: 2000
-    min_count: 4
-    max_count: 20
+    max_len: 500
+    min_count: 10
+    max_count: 10
   config:
-    lr: 0.01
+    lr: 0.0001
     lr_step: 100
     lr_gamma: 1.0
     l2_norm: 0.0
     interval: 1000
-    beta_max: 0.3
+    # beta_max: 0.3
+    # beta_max: 0.1
+    beta_max: 0.03
+    # beta_max: 0.01
+    # beta_max: 0.003
+    # beta_max: 0.001
     t0: 0.0001
     t1: 1.0
     ot_ode: false

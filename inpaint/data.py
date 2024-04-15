@@ -6,7 +6,7 @@ import lightning
 from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
 from pydantic import BaseModel, Field
 import numpy.random as rng
-from torch import Tensor
+from torch import Tensor, einsum
 import torch.utils
 import torchaudio.functional as F
 import torchaudio
@@ -63,6 +63,7 @@ class Degradation:
     max_len: int
     min_count: int
     max_count: int
+    target_share: float = 0.05  # TODO: better parametrization
 
     def __call__(self, wave: Tensor):
         batches, samples = wave.shape
@@ -76,6 +77,10 @@ class Degradation:
             blocks = blocks.item()
             durations = -self.avg_len * (1 - torch.rand((blocks,))).log()
             durations = durations.clip(self.min_len, self.max_len).to(torch.int32)
+            # normalize mask duration variance
+            durations = durations / (self.target_share * samples) * durations.sum() 
+            durations = durations.to(torch.int32) 
+
             starts = torch.randint(0, samples, (blocks,))
             ends = starts + durations
             for start, end in zip(starts, ends):
@@ -142,7 +147,7 @@ class TrackDataModule(lightning.LightningDataModule):
         self.data_val = val
     
     def train_dataloader(self) :
-        return DataLoader(self.data_train, self.batch_size, num_workers=4, persistent_workers=True)
+        return DataLoader(self.data_train, self.batch_size, num_workers=0)
     
     def val_dataloader(self):
-        return DataLoader(self.data_val, self.batch_size, num_workers=4, persistent_workers=True)
+        return DataLoader(self.data_val, self.batch_size, num_workers=0)

@@ -5,6 +5,7 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 from torch.optim import lr_scheduler
+import matplotlib.pyplot as plt
 # from torch.nn.parallel import DistributedDataParallel as DDP
 
 # from torch_ema import ExponentialMovingAverage
@@ -59,6 +60,7 @@ class RunnerLightning(lightning.LightningModule):
         self.augment = augment
         self.corrupt = corrupt
         self.net = net 
+        self.lr = self.config.lr  # for automatic lr tuning
         self.diffusion = Diffusion(self.config.beta_schedule, self.device)
     
     def compute_label(self, step: Tensor, x0: Tensor, xt: Tensor):
@@ -75,7 +77,7 @@ class RunnerLightning(lightning.LightningModule):
 
     
     def configure_optimizers(self):
-        optim_dict = {'lr': self.config.lr, 'weight_decay': self.config.l2_norm}
+        optim_dict = {'lr': self.lr, 'weight_decay': self.config.l2_norm}
         # sched_dict = {'step_size': self.config.lr_step, 'gamma': self.config.lr_gamma}
         optimizer = torch.optim.AdamW(self.parameters(), **optim_dict)
         scheduler = lr_scheduler.LinearLR(optimizer, start_factor=0.3, total_iters=3)
@@ -85,22 +87,79 @@ class RunnerLightning(lightning.LightningModule):
             'lr_scheduler': scheduler,
         }
     
+    def step_plots(self, x: Tensor, y: Tensor, xt: Tensor, label: Tensor, pred: Tensor, mask: Tensor, step: Tensor):
+        # times = [0, 0.25, 0.5, 0.75, 1.0]
+        batch_id = 0
+        # steps = [int(t * self.config.interval) for t in times]
+        mask_start = mask[batch_id].argmax()
+        mask_end = mask_start + (~mask[batch_id, mask_start:]).argmax()
+        diff = mask_end - mask_start
+        start = mask_start - diff
+        end = mask_end + diff
+
+        plt.plot(xt[batch_id, start:end].detach().cpu(), linewidth=1, label='xt')
+        plt.plot(y[batch_id, start:end].detach().cpu(), linewidth=1, label='y')
+        plt.plot(label[batch_id, start:end].detach().cpu(), linewidth=1, label='label')
+        plt.plot(pred[batch_id, start:end].detach().cpu(), linewidth=1, label='pred')
+        plt.legend()
+        plt.show()
+    
+    def plot_steps(self, batch: Tensor):
+        from einops import repeat
+        # times = [0, 0.25, 0.5, 0.75, 0.95]
+        times = [0, 0.1, 0.2, 0.5, 0.75, 0.95]
+        step = Tensor([int(self.config.interval * t) for t in times], device=batch.device).to(torch.int32)
+        batch_id = 0
+        y = batch
+        x, mask = self.corrupt(y)
+        y = y[batch_id]
+        x = x[batch_id]
+        mask = mask[batch_id]
+        # print(x.shape)
+        # print(y.shape)
+        # print(mask.shape)
+        x = repeat(x, 't -> b t', b=len(times))
+        y = repeat(y, 't -> b t', b=len(times))
+        mask = repeat(mask, 't -> b t', b=len(times))
+        xt = self.diffusion.q_sample(step, y, x, ot_ode=self.config.ot_ode)
+        xt = mask * xt + ~mask * y
+        label = self.compute_label(step, y, xt)
+
+        mask_start = (mask[batch_id] * 1).argmax()
+        mask_end = mask_start + ((~mask[batch_id, mask_start:]) * 1).argmax()
+        diff = mask_end - mask_start
+        start = mask_start - diff
+        end = mask_end + diff
+
+        fig, axs = plt.subplots(nrows=len(times), ncols=1, figsize=(15, 20))
+        for i, ax in enumerate(axs):
+            # ax.plot(label[i, start:end].detach().cpu(), linewidth=1, label='label')
+            ax.plot(xt[i, start:end].detach().cpu(), linewidth=1, label='xt')
+            ax.plot(y[i, start:end].detach().cpu(), linewidth=1, label='y')
+            ax.plot(x[i, start:end].detach().cpu(), linewidth=1, label='x')
+            ax.set_title(f'Time = {times[i]}')
+        fig.legend()
+        fig.savefig(f'.beta-search/beta={self.config.beta_max:.4f}.pdf')
+
+
+    
     def training_step(self, batch: Tensor):
-        batch_size = batch.shape[0]
+        batch_size, samples = batch.shape
         y = self.augment(batch)
         x, mask = self.corrupt(y)
 
         step = torch.randint(0, self.config.interval, (batch_size,), device=self.device)
         xt = self.diffusion.q_sample(step, y, x, ot_ode=self.config.ot_ode)
+        xt = mask * xt + ~mask * y  # inpainting task
         label = self.compute_label(step, y, xt)
         pred = self.net(xt, step)
         assert xt.shape == label.shape == pred.shape
 
-        if mask is not None:
-            pred = mask * pred
-            label = mask * label
+        pred = mask * pred
+        label = mask * label
 
         loss = F.mse_loss(pred, label)
         self.log('loss', loss, prog_bar=True)
+        self.log('pred_std', ((pred - label).std() * samples / (mask * 1.0).sum()), prog_bar=True)
 
         return loss

@@ -30,7 +30,7 @@ class UNet(torch.nn.Module):
         attention_features: int,
         attention_heads: int,
         # embedding_features: Optional[int] = None,
-        skip_t: Callable = SkipCat,
+        # skip_t: Callable = SkipCat,
         resnet_groups: int = 8,
         modulation_features: int = 1024,
         # embedding_max_length: int = 0,
@@ -39,6 +39,7 @@ class UNet(torch.nn.Module):
         token_size: int | None = None,
     ) -> None:
         super().__init__()
+        skip_t: Callable = SkipCat
         self.token_size = token_size if token_size is not None else 1
         in_channels = self.token_size
         # Check lengths
